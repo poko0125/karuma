@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>ジム管理ツール</title>
+   <style>
+       body {
+           font-family: Arial, sans-serif;
+           display: flex;
+           flex-direction: column;
+           align-items: center;
+           max-width: 800px;
+           margin: 0 auto;
+           padding: 20px;
+       }
+
+       .question-screen, .message-screen, .calendar-screen {
+           text-align: center;
+           width: 100%;
+           display: none;
+       }
+
+       .question-screen {
+           display: block;
+       }
+
+       button {
+           padding: 10px 20px;
+           margin: 10px;
+           font-size: 16px;
+           cursor: pointer;
+           border: none;
+           border-radius: 5px;
+       }
+
+       .calendar {
+           margin: 20px 0;
+       }
+
+       .calendar table {
+           width: 100%;
+           border-collapse: collapse;
+       }
+
+       .calendar th, .calendar td {
+           padding: 10px;
+           border: 1px solid #ddd;
+       }
+
+       .calendar td {
+           cursor: pointer;
+       }
+
+       .monday {
+           background-color: pink;
+       }
+
+       .visited {
+           background-color: lightgreen;
+       }
+
+       .message-green {
+           background-color: lightgreen;
+           padding: 20px;
+           border-radius: 5px;
+       }
+
+       .message-red {
+           background-color: pink;
+           padding: 20px;
+           border-radius: 5px;
+       }
+
+       .month-selector {
+           margin: 20px 0;
+           padding: 5px;
+           font-size: 16px;
+       }
+   </style>
+</head>
+<body>
+   <div class="question-screen">
+       <h2>今日はジムに行く？</h2>
+       <button onclick="handleYes()">はい</button>
+       <button onclick="handleNo()">いいえ</button>
+   </div>
+
+   <div class="message-screen">
+       <div id="message"></div>
+   </div>
+
+   <div class="calendar-screen">
+       <select class="month-selector" id="monthSelector"></select>
+       <div class="calendar" id="calendar"></div>
+       <div id="monthlyStats"></div>
+   </div>
+
+   <script>
+       let gymData = JSON.parse(localStorage.getItem('gymData')) || {};
+
+       function saveData() {
+           localStorage.setItem('gymData', JSON.stringify(gymData));
+       }
+
+       function showMessage(message, isError = false) {
+           document.querySelector('.question-screen').style.display = 'none';
+           const messageScreen = document.querySelector('.message-screen');
+           const messageDiv = document.getElementById('message');
+           messageScreen.style.display = 'block';
+           messageDiv.className = isError ? 'message-red' : 'message-green';
+           messageDiv.textContent = message;
+
+           setTimeout(() => {
+               showCalendar();
+           }, 2000);
+       }
+
+       function handleYes() {
+           const today = new Date();
+           const dateStr = today.toISOString().split('T')[0];
+           
+           if (today.getDay() === 1) { // 月曜日
+               showMessage('今日はジムは定休日だよ！', true);
+               // メッセージ表示後、2秒後にカレンダーを表示
+               setTimeout(() => {
+                   showCalendar();
+               }, 2000);
+           } else {
+               gymData[dateStr] = true;
+               saveData();
+               showMessage('今日も自分磨き頑張ろう！');
+           }
+       }
+
+       function handleNo() {
+           showMessage('今日はゆっくり休んでね！');
+       }
+
+       function showCalendar() {
+           document.querySelector('.message-screen').style.display = 'none';
+           document.querySelector('.calendar-screen').style.display = 'block';
+           
+           const today = new Date();
+           const monthSelector = document.getElementById('monthSelector');
+           monthSelector.innerHTML = '';
+           
+           for (let i = 1; i <= 12; i++) {
+               const option = document.createElement('option');
+               option.value = i;
+               option.textContent = `${i}月`;
+               if (i === today.getMonth() + 1) {
+                   option.selected = true;
+               }
+               monthSelector.appendChild(option);
+           }
+           
+           updateCalendar();
+       }
+
+       function updateCalendar() {
+           const year = new Date().getFullYear();
+           const month = parseInt(document.getElementById('monthSelector').value);
+           const firstDay = new Date(year, month - 1, 1);
+           const lastDay = new Date(year, month, 0);
+           
+           let calendarHTML = '<table><tr><th>日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th>土</th></tr><tr>';
+           
+           // 1日までの空白を埋める
+           for (let i = 0; i < firstDay.getDay(); i++) {
+               calendarHTML += '<td></td>';
+           }
+           
+           let monthlyVisits = 0;
+           for (let day = 1; day <= lastDay.getDate(); day++) {
+               const date = new Date(year, month - 1, day);
+               const dateStr = date.toISOString().split('T')[0];
+               
+               if (date.getDay() === 0 && day !== 1) {
+                   calendarHTML += '</tr><tr>';
+               }
+               
+               let className = '';
+               if (date.getDay() === 1) { // 月曜日
+                   className = 'monday';
+               } else if (gymData[dateStr]) {
+                   className = 'visited';
+                   monthlyVisits++;
+               }
+               
+               calendarHTML += `<td class="${className}">${day}</td>`;
+           }
+           
+           calendarHTML += '</tr></table>';
+           document.getElementById('calendar').innerHTML = calendarHTML;
+           document.getElementById('monthlyStats').textContent = `${month}月の運動日数: ${monthlyVisits}日`;
+       }
+
+       // 月選択時のイベントリスナー
+       document.getElementById('monthSelector').addEventListener('change', updateCalendar);
+
+       // 日付が変わった時の処理
+       function checkDate() {
+           const lastCheck = localStorage.getItem('lastCheck');
+           const today = new Date().toISOString().split('T')[0];
+           
+           if (lastCheck !== today) {
+               localStorage.setItem('lastCheck', today);
+               location.reload();
+           }
+       }
+
+       // 1分ごとに日付チェック
+       setInterval(checkDate, 60000);
+
+       // 初期チェック
+       checkDate();
+   </script>
+</body>
+</html>
